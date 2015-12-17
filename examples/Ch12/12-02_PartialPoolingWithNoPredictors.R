@@ -11,7 +11,8 @@ head(srrs2)
 mn <- srrs2$state == "MN"
 radon <- srrs2$activity[mn]
 
-# 0 for basement, 1 for first floor
+# "Measurements were taken in the lowest living area of each house, with
+# basement coded as 0 and first floor coded as 1." [254]
 floor <- srrs2$floor[mn]
 
 # "Because it makes sense to assume multiplicative effects, we want to work with
