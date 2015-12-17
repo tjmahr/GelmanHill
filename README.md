@@ -21,7 +21,7 @@ through them. I've tagged the commits with unmodified versions of the
 examples][pure-stan] so that those are readily available. 
 
 
-[book-link]: http://amzn.to/1P7BUME
+[book-link]: http://amzn.to/1Mjudi0
 [arm-page]: http://www.stat.columbia.edu/~gelman/arm/software/
 [bugsR]: http://www.stat.columbia.edu/~gelman/bugsR/
 [examples-commit]: https://github.com/stan-dev/example-models/tree/57f9cbcb0d6355e663679f1088adb21261da73bf
