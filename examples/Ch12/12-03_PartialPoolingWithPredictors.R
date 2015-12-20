@@ -67,7 +67,32 @@ unpooled_slope <- coef(lm_no_pool)[1]
 unpooled_se <- summary(lm_no_pool)$coefficients[, "Std. Error"][-1]
 
 
-## Comparing-complete pooling & no-pooling (Figure 12.2)
+
+### Partial pooling model
+
+data_list2 <- list(N = length(y), y = y, x = x, county = county)
+radon_partial_pool_sf1 <- stan(
+  file = 'examples/Ch12/radon_no_pool.stan',
+  data = data_list2,
+  iter = 1000,
+  chains = 4)
+
+radon_partial_pool_sf1@stanmodel
+
+# Don't print individual estimates (y-hat)
+print(radon_partial_pool_sf1, c("a", "beta", "sigma_a", "sigma_y", "mu_a"))
+
+partial_pooled <- extract(radon_partial_pool_sf1)
+
+partial_pooled_slope <- mean(partial_pooled$beta)
+partial_pooled_a_mean <- apply(partial_pooled$a, 2, mean)
+partial_pooled_a_sd <- apply(partial_pooled$a, 2, sd)
+
+
+
+
+
+## Comparing-complete pooling & no-pooling (Figure 12.4, 12.3)
 
 # Caption: "Figure 12.2 Complete-pooling (dashed lines, y = α + βx) and
 # no-pooling (solid lines, y = αj + βx) regressions fit to radon data from the
@@ -77,6 +102,9 @@ unpooled_se <- summary(lm_no_pool)$coefficients[, "Std. Error"][-1]
 
 # "...a selection of eight counties, chosen to capture a range of the sample
 # sizes in the survey" [254]
+
+# Caption: "Figure 12.4 Multilevel (partial pooling) regression lines y = αj +
+# βx fit to radon data from Minnesota, displayed for eight counties." [257]
 
 # lookup list from county name to county index
 display8 <- c(
@@ -92,7 +120,7 @@ display8 <- c(
 # lookup list from county index to county name
 display8_names <- structure(names(display8), names = display8)
 
-# x_jitter <- jitter(x, factor = .5)
+# Create a data-frame for plotting the raw data
 radon_df <- data.frame(y, x, county)
 radon8_df <- subset(radon_df, county %in% display8)
 radon8_df$county_name <- display8_names[as.character(radon8_df$county)]
@@ -100,21 +128,42 @@ radon8_df$county_name <- display8_names[as.character(radon8_df$county)]
 # Order the names based on the original lookup list above
 radon8_df$county_name <- factor(radon8_df$county_name, levels = names(display8))
 
-radon8_df$pooled_int <- pooled[1]
-radon8_df$pooled_slope <- pooled[2]
+# Create data-frames to hold the estimates from each model
+radon8_df_models <- radon8_df[c("county_name", "county")]
 
-radon8_df$unpooled_int <- unpooled_intercepts[radon8_df$county]
-radon8_df$unpooled_slope <- unpooled_slope
+radon8_df_models_pooled <- radon8_df_models
+radon8_df_models_pooled$int <- pooled[1]
+radon8_df_models_pooled$slope <- pooled[2]
+radon8_df_models_pooled$model <- "pooled"
+
+radon8_df_models_unpooled <- radon8_df_models
+radon8_df_models_unpooled$int <- unpooled_intercepts[radon8_df$county]
+radon8_df_models_unpooled$slope <- unpooled_slope
+radon8_df_models_unpooled$model <- "unpooled"
+
+radon8_df_models_partial <- radon8_df_models
+radon8_df_models_partial$int <- partial_pooled_a_mean[radon8_df$county]
+radon8_df_models_partial$slope <- partial_pooled_slope
+radon8_df_models_partial$model <- "partial"
+
+# Combine the model data-frames so they can all be plotted by one geom_abline
+# call, mapping the model column to the linetype aesthetic to differentiate the
+# models.
+df_models <- rbind(
+  radon8_df_models_pooled,
+  radon8_df_models_unpooled,
+  radon8_df_models_partial)
 
 y_range <- range(y[county %in% display8])
 
 p1 <- ggplot(radon8_df) +
   aes(factor(x), y) +
   geom_point(position = position_jitter(width = .1, height = 0)) +
-  geom_abline(aes(intercept = pooled_int, slope = pooled_slope),
-              linetype = "dashed") +
-  geom_abline(aes(intercept = unpooled_int, slope = unpooled_slope)) +
-  facet_wrap("county_name", ncol = 4) + theme_bw()
+  # Switch over to the model fit data-frame
+  geom_abline(aes(intercept = int, slope = slope, linetype = model),
+              data = df_models) +
+  facet_wrap("county_name", ncol = 4) +
+  theme_bw()
 p1
 
 ## No-pooling ests vs. sample size (plot on the left on figure 12.3)
@@ -123,9 +172,7 @@ frame1 <- data.frame(
   y1 = unpooled_intercepts,
   sd1 = unpooled_se)
 
-limits <- aes(ymax = unpooled+unpooled_se, ymin = unpooled-unpooled_se)
-p2 <-
-  ggplot(frame1) +
+p2 <- ggplot(frame1) +
   aes(x = x1, y = y1, ymin = y1 - sd1, ymax = y1 + sd1) +
   geom_point() +
   scale_y_continuous("estimated intercept alpha (no pooling)") +
@@ -133,27 +180,5 @@ p2 <-
   theme_bw() +
   geom_pointrange()
 print(p2)
-
-
-
-### Partial pooling model
-
-# data_list2 <- list(N = length(y), y = y, x = x, county = county)
-# radon_no_pool_sf1 <- stan(
-#   file = 'examples/Ch12/radon_no_pool.stan',
-#   data = data_list2,
-#   iter = 1000,
-#   chains = 4)
-#
-# radon_no_pool_sf1@stanmodel
-#
-# # Don't print individual estimates (y-hat)
-# print(radon_no_pool_sf1, c("a", "beta", "sigma_a", "sigma_y", "mu_a"))
-#
-# post_unpooled <- extract(radon_no_pool_sf1)
-#
-# unpooled_slope <- mean(post_unpooled$beta)
-# unpooled_a_mean <- apply(post_unpooled$a, 2, mean)
-# unpooled_a_sd <- apply(post_unpooled$a, 2, sd)
 
 
