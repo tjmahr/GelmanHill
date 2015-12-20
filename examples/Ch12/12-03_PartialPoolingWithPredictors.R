@@ -182,3 +182,24 @@ p2 <- ggplot(frame1) +
 print(p2)
 
 
+
+library("lme4")
+# "For example, in the radon model, the hyperparameters are estimated as µ-hat_α
+# = 1.46, β-hat = −0.69, σ-hat_y = 0.76, and σ-hat_α = 0.33." [258]
+arm::display(lmer(y ~ x + (1 | county)))
+#> lmer(formula = y ~ x + (1 | county))
+#>             coef.est coef.se
+#> (Intercept)  1.46     0.05
+#> x           -0.69     0.07
+#>
+#> Error terms:
+#>  Groups   Name        Std.Dev.
+#>  county   (Intercept) 0.33
+#>  Residual             0.76
+#> ---
+#> number of obs: 919, groups: county, 85
+#> AIC = 2179.3, DIC = 2156
+#> deviance = 2163.7
+
+# Intraclass correlation = σ_α^2 / (σ_α^2 + σ_y^2)
+(0.33 ^ 2) / ((0.33 ^ 2) + (0.76 ^ 2))
