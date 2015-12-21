@@ -1,7 +1,10 @@
 source("examples/Ch12/12-Shared.R")
 
 # Varying-intercept model (no predictors)
-data_list1 <- list(N = length(y), y = y, county = county)
+data_list1 <- list(
+  N = length(mn$log_radon),
+  y = mn$log_radon,
+  county = mn$county_ind)
 radon_intercept_sf1 <- stan(
   file = 'examples/Ch12/radon_intercept.stan',
   data = data_list1,
@@ -42,45 +45,44 @@ sd_a <- apply(post$a, 2, sd)
 # average radon level of all 85 counties in Minnesota. This average, however, is
 # estimated using only two data points." [253]
 
-frame1 = data.frame(
-  x1 = sample_sizes_jittered,
-  y1 = cty_means,
-  sd1 = cty_sds,
-  # 36 is Lac Qui Parle County
-  xi_36 = sample_sizes_jittered[36],
-  yi_36 = cty_means[36],
-  model = "No Pooling"
-)
+frame1 <- county_summary %>%
+  select(county, x1 = n_jitter, y1 = mean, sd1 = avg_se) %>%
+  mutate(model = "1. No Pooling")
+
+lqpc <- frame1 %>%
+  filter(county == "LAC QUI PARLE")
 
 ## Figure 12.1 (a)
 p1 <- ggplot(frame1) +
   aes(x = x1, y = y1) +
   # circle county 36
-  geom_point(aes(x = xi_36, y = yi_36), shape = 1, size = 30) +
+  geom_point(data = lqpc, shape = 1, size = 30) +
   # mean +/- one SD
   geom_pointrange(aes(ymin = y1 - sd1, ymax = y1 + sd1)) +
-  scale_x_log10("Sample Size in County j") +
+  scale_x_continuous("Sample Size in County j", trans = scales::log_trans(),
+                     breaks = c(1, 3, 10, 30, 100)) +
   scale_y_continuous("Avg. Log Radon in County j") +
   theme_bw() +
   labs(title = "No Pooling")
 print(p1)
 
 ## Figure 12.1 (b)
-frame2 <- data.frame(
-  x1 = sample_sizes_jittered,
-  y1 = mean_a,
-  sd1 = sd_a,
-  xi_36 = sample_sizes_jittered[36],
-  yi_36 = mean_a[36],
-  model = "Multilevel Model")
+
+# Overwrite estimates in no pooling frame with newer ones
+frame2 <- frame1 %>%
+  mutate(y1 = mean_a, sd1 = sd_a, model = "2. Multilevel Model")
+
+lqpc_2 <- frame2 %>%
+  filter(county == "LAC QUI PARLE")
 
 p2 <- ggplot(frame2) +
   aes(x = x1, y = y1) +
   # circle county 36
-  geom_point(aes(x = xi_36, y = yi_36), shape = 1, size = 30) +
+  geom_point(data = lqpc_2, shape = 1, size = 30) +
   # mean +/- one SD
   geom_pointrange(aes(ymin = y1 - sd1, ymax = y1 + sd1)) +
-  scale_x_log10("Sample Size in County j") +
+  scale_x_continuous("Sample Size in County j", trans = scales::log_trans(),
+                     breaks = c(1, 3, 10, 30, 100)) +
   scale_y_continuous("Avg. Log Radon in County j") +
   theme_bw() +
   labs(title = "Multilevel Model")
@@ -91,14 +93,24 @@ print(p2)
 
 # Combine the data-frames from each plot
 both_mods <- rbind(frame1, frame2)
-both_mods$model <- factor(both_mods$model, c("No Pooling", "Multilevel Model"))
+
+lqpc_3 <- both_mods %>%
+  filter(county == "LAC QUI PARLE")
 
 # Horizontal line. (Stan code rescaled mu `a ~ normal (10 * mu_a, sigma_a);`)
 est_mu_a <- summary(radon_intercept_sf1, "mu_a")[["summary"]][, "mean"] * 10
 
-# Replace data plot1 with the combined data, then facet by model name
-p3 <- (p1 %+% both_mods) +
+p3 <- ggplot(both_mods) +
+  aes(x = x1, y = y1) +
+  # circle county 36
+  geom_point(data = lqpc_3, shape = 1, size = 20) +
+  # mean +/- one SD
+  geom_pointrange(aes(ymin = y1 - sd1, ymax = y1 + sd1)) +
+  geom_hline(yintercept = est_mu_a) +
   facet_grid(. ~ model) +
-  labs(title = "") +
-  geom_hline(yintercept = est_mu_a)
+  scale_x_continuous("Sample Size in County j", trans = scales::log_trans(),
+                     breaks = c(1, 3, 10, 30, 100)) +
+  scale_y_continuous("Avg. Log Radon in County j") +
+  theme_bw() +
+  labs(title = "")
 p3

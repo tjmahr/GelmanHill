@@ -1,7 +1,11 @@
 source("examples/Ch12/12-Shared.R")
 
 ## Complete pooling regression - no random effects
-data_list1 <- list(N = length(y), y = y, x = x)
+data_list1 <- list(
+  N = length(mn$log_radon),
+  y = mn$log_radon,
+  x = mn$floor)
+str(data_list1)
 
 radon_complete_pool_sf1 <- stan(
   file = 'examples/Ch12/radon_complete_pool.stan',
@@ -21,16 +25,20 @@ pooled <- colMeans(post_pooled$beta)
 # The Stan model that was here showed shrinkage. (The intercept for Lac Qui
 # Parle was suppressed, and didn't recreate the plot in fig. 12.02.) So let's
 # fit the model with the R code used in the book instead.
-lm_no_pool <- lm(formula = y ~ x + factor(county) - 1)
+lm_no_pool <- lm(log_radon ~ 0 + floor + county, mn)
 unpooled_intercepts <- coef(lm_no_pool)[-1]
 unpooled_slope <- coef(lm_no_pool)[1]
 unpooled_se <- summary(lm_no_pool)$coefficients[, "Std. Error"][-1]
 
 
+## Partial pooling model
+data_list2 <- list(
+  N = length(mn$log_radon),
+  y = mn$log_radon,
+  x = mn$floor,
+  county = mn$county_ind)
+str(data_list2)
 
-### Partial pooling model
-
-data_list2 <- list(N = length(y), y = y, x = x, county = county)
 radon_partial_pool_sf1 <- stan(
   file = 'examples/Ch12/radon_no_pool.stan',
   data = data_list2,
@@ -49,9 +57,6 @@ partial_pooled_a_mean <- apply(partial_pooled$a, 2, mean)
 partial_pooled_a_sd <- apply(partial_pooled$a, 2, sd)
 
 
-
-
-
 ## Comparing-complete pooling & no-pooling (Figure 12.4, 12.3)
 
 # Caption: "Figure 12.2 Complete-pooling (dashed lines, y = α + βx) and
@@ -66,91 +71,78 @@ partial_pooled_a_sd <- apply(partial_pooled$a, 2, sd)
 # Caption: "Figure 12.4 Multilevel (partial pooling) regression lines y = αj +
 # βx fit to radon data from Minnesota, displayed for eight counties." [257]
 
-# lookup list from county name to county index
-display8 <- c(
-  `LAC QUI PARLE` = 36,
-  AITKIN = 1,
-  KOOCHICHING = 35,
-  DOUGLAS = 21,
-  CLAY = 14,
-  STEARNS = 71,
-  RAMSEY = 61,
-  `ST LOUIS` = 70)
+display8_names <- c("LAC QUI PARLE", "AITKIN", "KOOCHICHING", "DOUGLAS", "CLAY",
+                    "STEARNS", "RAMSEY", "ST LOUIS")
 
-# lookup list from county index to county name
-display8_names <- structure(names(display8), names = display8)
+counties <- mn %>%
+  select(county, county_ind) %>%
+  distinct %>%
+  arrange(county_ind)
 
-# Create a data-frame for plotting the raw data
-radon_df <- data.frame(y, x, county)
-radon8_df <- subset(radon_df, county %in% display8)
-radon8_df$county_name <- display8_names[as.character(radon8_df$county)]
+# Create data-frames summarising each model
+models <- list()
 
-# Order the names based on the original lookup list above
-radon8_df$county_name <- factor(radon8_df$county_name, levels = names(display8))
+models$pooled <- counties
+models$pooled$int <- pooled[1]
+models$pooled$slope <- pooled[2]
+models$pooled$model <- "pooled"
 
-# Create data-frames to hold the estimates from each model
-radon8_df_models <- radon8_df[c("county_name", "county")]
+models$unpooled <- counties
+models$unpooled$int <- unpooled_intercepts
+models$unpooled$slope <- unpooled_slope
+models$unpooled$model <- "unpooled"
 
-radon8_df_models_pooled <- radon8_df_models
-radon8_df_models_pooled$int <- pooled[1]
-radon8_df_models_pooled$slope <- pooled[2]
-radon8_df_models_pooled$model <- "pooled"
+models$partial <- counties
+models$partial$int <- partial_pooled_a_mean
+models$partial$slope <- partial_pooled_slope
+models$partial$model <- "partial"
 
-radon8_df_models_unpooled <- radon8_df_models
-radon8_df_models_unpooled$int <- unpooled_intercepts[radon8_df$county]
-radon8_df_models_unpooled$slope <- unpooled_slope
-radon8_df_models_unpooled$model <- "unpooled"
+# Combine model summaries, keeping just rows for the 8 counties
+radon8_df_models <- rbind_all(models) %>%
+  filter(county %in% display8_names) %>%
+  mutate(county = factor(county, levels = display8_names))
 
-radon8_df_models_partial <- radon8_df_models
-radon8_df_models_partial$int <- partial_pooled_a_mean[radon8_df$county]
-radon8_df_models_partial$slope <- partial_pooled_slope
-radon8_df_models_partial$model <- "partial"
-
-# Combine the model data-frames so they can all be plotted by one geom_abline
-# call, mapping the model column to the linetype aesthetic to differentiate the
-# models.
-df_models <- rbind(
-  radon8_df_models_pooled,
-  radon8_df_models_unpooled,
-  radon8_df_models_partial)
-
-y_range <- range(y[county %in% display8])
+# Create a data-frame for plotting the raw data for the 8 counties
+radon8_df <- mn %>%
+  select(county, county_ind, log_radon, floor) %>%
+  filter(county %in% display8_names) %>%
+  mutate(county = factor(county, levels = display8_names))
 
 p1 <- ggplot(radon8_df) +
-  aes(factor(x), y) +
+  aes(floor, log_radon) +
   geom_point(position = position_jitter(width = .1, height = 0)) +
   # Switch over to the model fit data-frame
   geom_abline(aes(intercept = int, slope = slope, linetype = model),
-              data = df_models) +
-  facet_wrap("county_name", ncol = 4) +
+              data = radon8_df_models) +
+  facet_wrap("county", ncol = 4) +
+  scale_x_continuous("floor", breaks = c(0, 1)) +
   theme_bw()
 p1
 
 ## No-pooling ests vs. sample size (plot on the left on figure 12.3)
-frame1 <- data.frame(
-  x1 = sample_sizes_jittered,
-  y1 = unpooled_intercepts,
-  sd1 = unpooled_se)
+frame1 <- county_summary %>%
+  select(county, x1 = n_jitter) %>%
+  mutate(
+    y1 = unpooled_intercepts,
+    sd1 = unpooled_se)
 
 p2 <- ggplot(frame1) +
   aes(x = x1, y = y1, ymin = y1 - sd1, ymax = y1 + sd1) +
   geom_point() +
+  geom_pointrange() +
+  scale_x_continuous("Sample Size in County j", trans = scales::log_trans(),
+                     breaks = c(1, 3, 10, 30, 100)) +
   scale_y_continuous("estimated intercept alpha (no pooling)") +
-  scale_x_log10("Sample Size in County j") +
-  theme_bw() +
-  geom_pointrange()
+  theme_bw()
 print(p2)
 
-
-
-library("lme4")
 # "For example, in the radon model, the hyperparameters are estimated as µ-hat_α
 # = 1.46, β-hat = −0.69, σ-hat_y = 0.76, and σ-hat_α = 0.33." [258]
-arm::display(lmer(y ~ x + (1 | county)))
-#> lmer(formula = y ~ x + (1 | county))
+arm::display(lmer(log_radon ~ floor + (1 | county), mn))
+#> lmer(formula = log_radon ~ floor + (1 | county), data = mn)
 #>             coef.est coef.se
 #> (Intercept)  1.46     0.05
-#> x           -0.69     0.07
+#> floor       -0.69     0.07
 #>
 #> Error terms:
 #>  Groups   Name        Std.Dev.
