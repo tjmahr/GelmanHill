@@ -1,58 +1,71 @@
-library(rstan)
-library(ggplot2)
-## Read the data
-# Data are at http://www.stat.columbia.edu/~gelman/arm/examples/radon
+# library(rstan)
+# library(ggplot2)
+# ## Read the data
+# # Data are at http://www.stat.columbia.edu/~gelman/arm/examples/radon
+#
+# # The R codes & data files should be saved in the same directory for
+# # the source command to work
+#
+# srrs2 <- read.table ("srrs2.dat", header=T, sep=",")
+# mn <- srrs2$state=="MN"
+# radon <- srrs2$activity[mn]
+# log.radon <- log (ifelse (radon==0, .1, radon))
+# floor <- srrs2$floor[mn]       # 0 for basement, 1 for first floor
+# n <- length(radon)
+# y <- log.radon
+# x <- floor
+#
+# # get county index variable
+# county.name <- as.vector(srrs2$county[mn])
+# uniq <- unique(county.name)
+# J <- length(uniq)
+# county <- rep (NA, J)
+# for (i in 1:J){
+#   county[county.name==uniq[i]] <- i
+# }
+#
+#  # no predictors
+# ybarbar = mean(y)
+#
+# sample.size <- as.vector (table (county))
+# sample.size.jittered <- sample.size*exp (runif (J, -.1, .1))
+# cty.mns = tapply(y,county,mean)
+# cty.vars = tapply(y,county,var)
+# cty.sds = mean(sqrt(cty.vars[!is.na(cty.vars)]))/sqrt(sample.size)
+# cty.sds.sep = sqrt(tapply(y,county,var)/sample.size)
 
-# The R codes & data files should be saved in the same directory for
-# the source command to work
+source("examples/Ch12/12-Shared.R")
 
-srrs2 <- read.table ("srrs2.dat", header=T, sep=",")
-mn <- srrs2$state=="MN"
-radon <- srrs2$activity[mn]
-log.radon <- log (ifelse (radon==0, .1, radon))
-floor <- srrs2$floor[mn]       # 0 for basement, 1 for first floor
-n <- length(radon)
-y <- log.radon
-x <- floor
-
-# get county index variable
-county.name <- as.vector(srrs2$county[mn])
-uniq <- unique(county.name)
-J <- length(uniq)
-county <- rep (NA, J)
-for (i in 1:J){
-  county[county.name==uniq[i]] <- i
-}
-
- # no predictors
-ybarbar = mean(y)
-
-sample.size <- as.vector (table (county))
-sample.size.jittered <- sample.size*exp (runif (J, -.1, .1))
-cty.mns = tapply(y,county,mean)
-cty.vars = tapply(y,county,var)
-cty.sds = mean(sqrt(cty.vars[!is.na(cty.vars)]))/sqrt(sample.size)
-cty.sds.sep = sqrt(tapply(y,county,var)/sample.size)
 
 ## Get the county-level predictor
-srrs2.fips <- srrs2$stfips*1000 + srrs2$cntyfips
-cty <- read.table ("cty.dat", header=T, sep=",")
-usa.fips <- 1000*cty[,"stfips"] + cty[,"ctfips"]
-usa.rows <- match (unique(srrs2.fips[mn]), usa.fips)
-uranium <- cty[usa.rows,"Uppm"]
-u <- log (uranium)
+srrs2.fips <- srrs2$stfips * 1000 + srrs2$cntyfips
+cty <- read.csv("examples/ch12/cty.dat")
+usa.fips <- 1000 * cty[, "stfips"] + cty[, "ctfips"]
+usa.rows <- match(unique(srrs2.fips[mn]), usa.fips)
+uranium <- cty[usa.rows, "Uppm"]
+u <- log(uranium)
 
 ## Varying-intercept model w/ group-level predictors
 u.full <- u[county]
-dataList.3 <- list(N=length(y), y=y,x=x,county=county,u=u.full)
-radon_group.sf1 <- stan(file='radon_group.stan', data=dataList.3,
-                        iter=1000, chains=4)
+dataList.3 <- list(N = length(y), y = y, x = x, county = county, u = u.full)
+radon_group.sf1 <- stan(
+  file = 'examples/Ch12/radon_group.stan',
+  data = dataList.3,
+  iter = 1000,
+  chains = 4)
+
+# View model that was fit
+radon_group.sf1@stanmodel
+
 print(radon_group.sf1, pars = c("b","beta", "sigma", "lp__"))
 post1 <- extract(radon_group.sf1)
-post1.ranef <- colMeans(post1$const_coef)
+post1.ranef <- colMeans(post1$b)
 mean1.ranef <- mean(post1.ranef)
 post1.beta <- colMeans(post1$beta)
 post1.fixef1 <- mean(post1.ranef)
+
+library("lme4")
+lmer(y ~ x + u.full + (1 | county))
 
 ## Plots on Figure 12.5
 dataList.4 <- list(N=length(y), y=y,x=x,county=county)
