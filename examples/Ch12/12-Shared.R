@@ -11,9 +11,30 @@ options(mc.cores = parallel::detectCores())
 mn <- read.csv("examples/Ch12/srrs2.dat", stringsAsFactors = FALSE) %>%
   as.tbl %>%
   filter(state == "MN") %>%
-  mutate(county = str_trim(county)) %>%
-  select(county, radon = activity, floor)
+  mutate(county = str_trim(county),
+         fips = stfips * 1000 + cntyfips) %>%
+  select(fips, county, radon = activity, floor)
 mn
+
+# Include Uranium measurements from another table, matching on the FIPS code
+
+# "The FIPS county code is a five-digit Federal Information Processing Standard
+# (FIPS) code (FIPS 6-4) which uniquely identifies counties and county
+# equivalents in the United States, certain U.S. possessions, and certain freely
+# associated states. The first two digits are the FIPS state code and the last
+# three are the county code within the state or possession"
+# [https://en.wikipedia.org/wiki/FIPS_county_code]
+
+cty <- read.csv("examples/ch12/cty.dat") %>%
+  filter(st == "MN") %>%
+  mutate(
+    fips = 1000 * stfips + ctfips,
+    uranium = log(Uppm)) %>%
+  select(fips, uranium) %>%
+  distinct
+
+mn <- left_join(mn, cty, by = "fips")
+
 
 # "Measurements were taken in the lowest living area of each house, with
 # basement coded as 0 and first floor coded as 1." [254]

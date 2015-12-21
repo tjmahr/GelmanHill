@@ -1,123 +1,129 @@
-# library(rstan)
-# library(ggplot2)
-# ## Read the data
-# # Data are at http://www.stat.columbia.edu/~gelman/arm/examples/radon
-#
-# # The R codes & data files should be saved in the same directory for
-# # the source command to work
-#
-# srrs2 <- read.table ("srrs2.dat", header=T, sep=",")
-# mn <- srrs2$state=="MN"
-# radon <- srrs2$activity[mn]
-# log.radon <- log (ifelse (radon==0, .1, radon))
-# floor <- srrs2$floor[mn]       # 0 for basement, 1 for first floor
-# n <- length(radon)
-# y <- log.radon
-# x <- floor
-#
-# # get county index variable
-# county.name <- as.vector(srrs2$county[mn])
-# uniq <- unique(county.name)
-# J <- length(uniq)
-# county <- rep (NA, J)
-# for (i in 1:J){
-#   county[county.name==uniq[i]] <- i
-# }
-#
-#  # no predictors
-# ybarbar = mean(y)
-#
-# sample.size <- as.vector (table (county))
-# sample.size.jittered <- sample.size*exp (runif (J, -.1, .1))
-# cty.mns = tapply(y,county,mean)
-# cty.vars = tapply(y,county,var)
-# cty.sds = mean(sqrt(cty.vars[!is.na(cty.vars)]))/sqrt(sample.size)
-# cty.sds.sep = sqrt(tapply(y,county,var)/sample.size)
-
 source("examples/Ch12/12-Shared.R")
 
-
-## Get the county-level predictor
-srrs2.fips <- srrs2$stfips * 1000 + srrs2$cntyfips
-cty <- read.csv("examples/ch12/cty.dat")
-usa.fips <- 1000 * cty[, "stfips"] + cty[, "ctfips"]
-usa.rows <- match(unique(srrs2.fips[mn]), usa.fips)
-uranium <- cty[usa.rows, "Uppm"]
-u <- log(uranium)
+counties <- mn %>%
+  select(county, county_ind, uranium) %>%
+  distinct %>%
+  arrange(county_ind)
 
 ## Varying-intercept model w/ group-level predictors
-u.full <- u[county]
-dataList.3 <- list(N = length(y), y = y, x = x, county = county, u = u.full)
-radon_group.sf1 <- stan(
+
+data_list3 <- list(
+  N = length(mn$log_radon),
+  y = mn$log_radon,
+  x = mn$floor,
+  county = mn$county_ind,
+  u = mn$uranium)
+str(data_list3)
+
+radon_group_sf1 <- stan(
   file = 'examples/Ch12/radon_group.stan',
-  data = dataList.3,
+  data = data_list3,
   iter = 1000,
   chains = 4)
 
+# Warning messages:
+# 1: There were 182 divergent transitions after warmup. Increasing adapt_delta above 0.8 may help.
+# 2: Examine the pairs() plot to diagnose sampling problems
+
 # View model that was fit
-radon_group.sf1@stanmodel
+radon_group_sf1@stanmodel
 
-print(radon_group.sf1, pars = c("b","beta", "sigma", "lp__"))
-post1 <- extract(radon_group.sf1)
-post1.ranef <- colMeans(post1$b)
-mean1.ranef <- mean(post1.ranef)
-post1.beta <- colMeans(post1$beta)
-post1.fixef1 <- mean(post1.ranef)
+print(radon_group_sf1, pars = c("b","beta", "sigma", "lp__"))
+post1 <- extract(radon_group_sf1)
 
-library("lme4")
-lmer(y ~ x + u.full + (1 | county))
+post1_ranef <- colMeans(post1$b)
+post1_beta <- colMeans(post1$beta)
+
+str(post1)
+
+model1 <- counties %>%
+  mutate(
+    int = post1_ranef + post1_beta[2] * uranium,
+    slope = post1_beta[1],
+    model = "partial")
+
 
 ## Plots on Figure 12.5
-dataList.4 <- list(N=length(y), y=y,x=x,county=county)
-radon_no_pool.sf1 <- stan(file='radon_no_pool.stan', data=dataList.4,
-                          iter=1000, chains=4)
-print(radon_no_pool.sf1)
-post2 <- extract(radon_no_pool.sf1)
-post2.ranef <- colMeans(post2$factor)
-mean2.ranef <- mean(post2.ranef)
-post2.fixef1 <- colMeans(post2$beta)
-post2.fixef2 <- mean(post2.ranef)
 
-a.hat.M1 <- post2.fixef2 + post2.ranef - mean2.ranef
-b.hat.M1 <- post2.fixef1
+# Partial pooling model
+data_list2 <- list(
+  N = length(mn$log_radon),
+  y = mn$log_radon,
+  x = mn$floor,
+  county = mn$county_ind)
+str(data_list2)
 
-a.hat.M2 <- post1.fixef1 + post1.beta[2] * u + post1.ranef - mean1.ranef
-b.hat.M2 <- post1.beta[1]
+radon_partial_pool_sf1 <- stan(
+  file = 'examples/Ch12/radon_no_pool.stan',
+  data = data_list2,
+  iter = 1000,
+  chains = 4)
 
-x.jitter <- x + runif(n,-.05,.05)
-display8 <- c (36, 1, 35, 21, 14, 71, 61, 70)  # counties to be displayed
-y.range <- range (y[!is.na(match(county,display8))])
+radon_partial_pool_sf1@stanmodel
 
-radon.data <- data.frame(y, x.jitter, county)
-radon8.data <- subset(radon.data, county %in% display8)
-radon8.data$county.name <- radon8.data$county
-radon8.data$county.name <- factor(radon8.data$county.name,levels=c("36","1","35","21","14","71","61","70"),
-                                  labels=c("LAC QUI PARLE", "AITKIN", "KOOCHICHING",
-                                      "DOUGLAS", "CLAY", "STEARNS", "RAMSEY",
-                                      "ST LOUIS"))
-radon8.data$m1.int <- a.hat.M1$value[radon8.data$county]
-radon8.data$m1.slope <- rep(b.hat.M1$value,209)
-radon8.data$m2.int <- a.hat.M2$value[radon8.data$county]
-radon8.data$m2.slope <- rep(b.hat.M2$value,209)
+# Don't print individual estimates (y-hat)
+print(radon_partial_pool_sf1, c("a", "beta", "sigma_a", "sigma_y", "mu_a"))
 
-p1 <- ggplot(radon8.data, aes(x.jitter, y)) +
-     geom_jitter(position = position_jitter(width = .05, height = 0)) +
-     scale_x_continuous(breaks=c(0,1), labels=c("0", "1")) +
-     geom_abline(aes(intercept = m1.int, slope = m1.slope), size = 0.25,colour="grey10") +
-     geom_abline(aes(intercept = m2.int,slope=m2.slope), size = 0.25) +
-     facet_wrap(~ county.name, ncol = 4)
-print(p1)
+partial_pooled <- extract(radon_partial_pool_sf1)
+
+partial_pooled_slope <- mean(partial_pooled$beta)
+partial_pooled_a_mean <- apply(partial_pooled$a, 2, mean)
+partial_pooled_a_sd <- apply(partial_pooled$a, 2, sd)
+
+model2 <- counties %>%
+  mutate(
+    int = partial_pooled_a_mean,
+    slope = partial_pooled_slope,
+    model = "uranium")
+
+display8_names <- c("LAC QUI PARLE", "AITKIN", "KOOCHICHING", "DOUGLAS", "CLAY",
+                    "STEARNS", "RAMSEY", "ST LOUIS")
+
+# Combine model summaries, keeping just rows for the 8 counties
+radon8_df_models <- rbind(model2, model1) %>%
+  filter(county %in% display8_names) %>%
+  mutate(county = factor(county, levels = display8_names))
+
+# Create a data-frame for plotting the raw data for the 8 counties
+radon8_df <- mn %>%
+  select(county, county_ind, log_radon, floor) %>%
+  filter(county %in% display8_names) %>%
+  mutate(county = factor(county, levels = display8_names))
+
+
+p1 <- ggplot(radon8_df) +
+  aes(floor, log_radon) +
+  geom_point(position = position_jitter(width = .1, height = 0)) +
+  # Switch over to the model fit data-frame
+  geom_abline(aes(intercept = int, slope = slope, linetype = model),
+              data = radon8_df_models) +
+  facet_wrap("county", ncol = 4) +
+  scale_x_continuous("floor", breaks = c(0, 1)) +
+  theme_bw()
+p1
+
 
 # Plot of ests & se's vs. county uranium (Figure 12.6)
-a.se.M2 <- se.coef(M2)$county
-a.se.M2 <- melt(a.se.M2)
-dev.new()
+m_vim_grp <- lmer(log_radon ~ floor + uranium + (1 | county), mn)
+display(m_vim_grp)
 
-frame1 = data.frame(x1=u,y1=a.hat.M2$value)
-limits <- aes(ymax=a.hat.M2$value+a.se.M2$value,ymin=a.hat.M2$value-a.se.M2$value)
-p2 <- ggplot(frame1,aes(x=x1,y=y1)) +
-      geom_point() +
-      theme_bw() +
-      geom_pointrange(limits) +
-      geom_abline(aes(intercept=fixef(M2)["(Intercept)"],slope=fixef(M2)["u.full"]))
-print(p2)
+counties$int_coef <- coef(m_vim_grp)$county[["(Intercept)"]]
+counties$uranium_beta <- fixef(m_vim_grp)["uranium"]
+counties$int_se <- se.coef(m_vim_grp)[["county"]][, 1]
+
+counties <- counties %>%
+  mutate(
+    int_est = int_coef + uranium * uranium_beta,
+    y1 = int_est - int_se,
+    y2 = int_est + int_se)
+
+line_int <- unname(fixef(m_vim_grp)["(Intercept)"])
+line_slope <- unname(fixef(m_vim_grp)["uranium"])
+ggplot(counties) +
+  aes(x = uranium, y = int_est) +
+  geom_point() +
+  geom_pointrange(aes(ymin = y1, ymax = y2)) +
+  geom_abline(aes(intercept = line_int, slope = line_slope)) +
+  theme_bw() +
+  xlab("county-level uranium measure") +
+  ylab("est. regression intercept")
