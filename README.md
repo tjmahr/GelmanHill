@@ -2,6 +2,16 @@
 
 Examples and data for [Gelman &amp; Hill 2007][book-link].
 
+## Notebooks
+
+A notebook file contains the code, output and formatted comments for an R
+script. As I work through the examples, I save notebooks.
+
+- Chapter 7
+  - [07-01 Simulating Probability Models](examples/Ch07/07-01_SimulationOfProbabilityModels.md)
+  - [07-02 Summarizing Linear Regression Using Simulation](examples/Ch07/07-02_SummarizingLinearRegressionUsingSimulation.md)
+
+
 ## BUGS vs. Stan
 
 I originally downloaded the materials from [Gelman's page][arm-page] and 
