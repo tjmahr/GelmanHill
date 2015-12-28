@@ -8,6 +8,7 @@ opts_knit$set(root.dir = "../../")
 # + warning = FALSE, message = FALSE
 library("ggplot2")
 library("dplyr")
+library("tidyr")
 library("readr")
 library("stringr")
 library("rstan")
@@ -31,12 +32,12 @@ read_asc_year <- function(path) {
            # Impute uncontested values: Create an adjusted share to show what
            # might have happened if the race had been contested.
            DemShare_Adj = ifelse(DemShare < 0.1, .25, DemShare),
-           DemShare_Adj = ifelse(0.9 < DemShare, .75, DemShare)) %>%
+           DemShare_Adj = ifelse(0.9 < DemShare_Adj, .75, DemShare_Adj)) %>%
     select(year, everything())
   df
 }
 
-# path <- paths[5]
+# path <- paths[46]
 paths <- list.files(path = "examples/Ch07/cong3/", full.names = TRUE)
 
 # Old code loaded each asc file into a list of matrices. We're combining all the
@@ -62,10 +63,10 @@ congress <- paths %>%
 # Note: download all '.asc' files into your R working directory in a file named
 # cong3 for the above command to work
 
-i86 <- (1986 - 1896) / 2 + 1
-cong86 <- congress[[i86]]
-cong88 <- congress[[i86 + 1]]
-cong90 <- congress[[i86 + 2]]
+# i86 <- (1986 - 1896) / 2 + 1
+# cong86 <- congress[[i86]]
+# cong88 <- congress[[i86 + 1]]
+# cong90 <- congress[[i86 + 2]]
 
 # v86 <- cong86[, 5] / (cong86[, 5] + cong86[, 6])
 # bad86 <- cong86[, 5] == -9 | cong86[, 6] == -9
@@ -108,9 +109,9 @@ p1 <- ggplot(v88_hist) +
   theme_bw()
 p1
 
-## Fitting the model (congress.stan) lm (vote.88 ~ vote.86 + incumbency.88)
-library("tidyr")
 
+## Fitting the model (congress.stan)
+## lm (vote.88 ~ vote.86 + incumbency.88)
 year_by_year <- congress %>%
   filter(year %in% c(1986, 1988)) %>%
   select(-RepVote, -DemVote) %>%
@@ -134,8 +135,7 @@ df_m <- year_by_year %>% filter(Contested_1988 == 1)
 # vote.88 <- v88$DemShare[contested88]
 # ok <- !is.na(vote.86 + incumbency.88 + vote.88)
 
-
-summary(lm(DemShare_1988 ~ DemShare_Adj_1986 + Incumbent_1988, df_m))
+summary(lm(DemShare_Adj_1988 ~ DemShare_Adj_1986 + Incumbent_1988, df_m))
 
 # summary(lm(vote.88 ~ vote.86 + incumbency.88))
 ## Coefficients:
