@@ -119,7 +119,8 @@ year_by_year <- congress %>%
   unite(Key_Year, Key, year) %>%
   spread(Key_Year, Value)
 
-df_m <- year_by_year %>% filter(Contested_1988 == 1)
+df_m <- year_by_year %>%
+  filter(Contested_1988 == 1)
 
 # year_by_year
 # v86 <- v86$X4
@@ -144,62 +145,84 @@ summary(lm(DemShare_Adj_1988 ~ DemShare_Adj_1986 + Incumbent_1988, df_m))
 ## vote.86       0.583276   0.035045   16.64   <2e-16 ***
 ## incumbency.88 0.077052   0.007036   10.95   <2e-16 ***
 ## ---
-dataList.1 <-
-  list(
-    N = length(vote.88[ok]), vote_88 = vote.88[ok], vote_86 = vote.86[ok],
-    incumbency_88 = incumbency.88[ok]
-  )
-congress.sf1 <-
-  stan(
-    file = "congress.stan", data = dataList.1, iter = 1000, chains = 4
-  )
-print(congress.sf1)
 
-fit88.post <- extract(congress.sf1)
+df_stan <- df_m %>%
+  select(DemShare_Adj_1986, Incumbent_1988, DemShare_1988) %>%
+  na.omit
+# ok <- !is.na(vote.86 + incumbency.88 + vote.88)
+
+data_list1 <- list(
+  N = nrow(df_stan),
+  vote_88 = df_stan$DemShare_1988,
+  vote_86 = df_stan$DemShare_Adj_1986,
+  incumbency_88 = df_stan$Incumbent_1988)
+
+stan_congress <- stan(
+  file = "examples/Ch07/congress.stan",
+  data = data_list1,
+  iter = 1000,
+  chains = 4)
+print(stan_congress)
+
+fit88_post <- rstan::extract(stan_congress)
 
 ## Figure 7.4
 
 # 7.4 (a)
-j.v86 <- ifelse(contested86, v86, jitt(v86, 0.02))
-j.v88 <- ifelse(contested88, v88, jitt(v88, 0.02))
+# j.v86 <- ifelse(contested86, v86, jitter(v86, amount = 0.02))
+# j.v88 <- ifelse(contested88, v88, jitter(v88, amount = 0.02))
+#
+# frame1 <- data.frame(x1 = j.v86[inc88 == 0], y1 = j.v88[inc88 == 0])
+# frame2 <- data.frame(x2 = j.v86[inc88 == 1], y2 = j.v88[inc88 == 1])
+# frame3 <- data.frame(x3 = j.v86[inc88 == -1], y3 = j.v88[inc88 == -1])
+#
+# dev.new()
 
-frame1 <- data.frame(x1 = j.v86[inc88 == 0], y1 = j.v88[inc88 == 0])
-frame2 <- data.frame(x2 = j.v86[inc88 == 1], y2 = j.v88[inc88 == 1])
-frame3 <- data.frame(x3 = j.v86[inc88 == -1], y3 = j.v88[inc88 == -1])
+names(year_by_year) <- names(year_by_year) %>%
+  str_replace("Contested", "Con") %>%
+  str_replace("DemShare_", "Dem_") %>%
+  str_replace("Incumbent", "Inc")
 
-dev.new()
-p2 <- ggplot() +
-  geom_point(data = frame1, aes(x = x1, y = y1), shape = 1) +
-  geom_point(data = frame2, aes(x = x2, y = y2), shape = 16) +
-  geom_point(data = frame3, aes(x = x3, y = y3), shape = 4) +
-  scale_y_continuous("Democratic Vote Share in 1988") +
-  scale_x_continuous("Democratic Vote Share in 1986") +
-  theme_bw() +
-  geom_abline(yintercept = 0, slope = 1) +
-  labs(title = "Raw Data (jittered at 0 and 1)")
-print(p2)
+# Jitter uncontested points
+df_plot <-
+  year_by_year %>%
+  mutate(Jit_86 = ifelse(Con_1986, Dem_1986, jitter(Dem_1986, amount = 0.02)),
+         Jit_88 = ifelse(Con_1988, Dem_1988, jitter(Dem_1988, amount = 0.02)))
+
+p2 <- ggplot(df_plot) +
+  aes(x = Jit_86, Jit_88, shape = factor(Inc_1988)) +
+  geom_point() +
+  scale_shape_manual(values = c(1, 16, 4)) +
+  xlab("Democratic Vote Share in 1986") +
+  ylab("Democratic Vote Share in 1988") +
+  labs(title = "Raw Data (jittered at 0 and 1)") +
+  geom_abline(intercept = 0, slope = 1) +
+  theme_bw()
 
 # 7.4 (b)
-v86.adjusted <-
-  ifelse(v86 < 0.1, 0.25, ifelse(v86 > 0.9, 0.75, v86))
-vote.86 <- v86.adjusted[contested88]
-vote.88 <- v88[contested88]
-incumbency.88 <- inc88[contested88]
+# v86.adjusted <-
+#   ifelse(v86 < 0.1, 0.25, ifelse(v86 > 0.9, 0.75, v86))
+# vote.86 <- v86.adjusted[contested88]
+# vote.88 <- v88[contested88]
+# incumbency.88 <- inc88[contested88]
+#
+# frame4 <- data.frame(x1 = vote.86[incumbency.88 ==  0], y1 = vote.88[incumbency.88 ==  0])
+# frame5 <- data.frame(x2 = vote.86[incumbency.88 ==  1], y2 = vote.88[incumbency.88 ==  1])
+# frame6 <- data.frame(x3 = vote.86[incumbency.88 == -1], y3 = vote.88[incumbency.88 == -1])
 
-frame4 <- data.frame(x1 = vote.86[incumbency.88 ==  0], y1 = vote.88[incumbency.88 ==  0])
-frame5 <- data.frame(x2 = vote.86[incumbency.88 ==  1], y2 = vote.88[incumbency.88 ==  1])
-frame6 <- data.frame(x3 = vote.86[incumbency.88 == -1], y3 = vote.88[incumbency.88 == -1])
 
-p3 <- ggplot() +
-  geom_point(data = frame4, aes(x = x1, y = y1), shape = 1) +
-  geom_point(data = frame5, aes(x = x2, y = y2), shape = 16) +
-  geom_point(data = frame6, aes(x = x3, y = y3), shape = 4) +
-  scale_y_continuous("Democratic Vote Share in 1988") +
-  scale_x_continuous("Democratic Vote Share in 1986") +
-  theme_bw() +
-  geom_abline(yintercept = 0, slope = 1) +
-  labs(title = "Adjusted data (imputing 0's and 1's to .75)")
-print(p3)
+p3 <- ggplot(df_m) +
+  aes(x = DemShare_Adj_1986, DemShare_Adj_1988, shape = factor(Incumbent_1988)) +
+  geom_point() +
+  scale_shape_manual(values = c(1, 16, 4)) +
+  xlab("Democratic Vote Share in 1986") +
+  ylab("Democratic Vote Share in 1988") +
+  labs(title = "Adjusted data (imputing 0's to .25 and 1's to .75)") +
+  geom_abline(intercept = 0, slope = 1) +
+  theme_bw()
+p3
+
+
 
 
 
@@ -212,12 +235,12 @@ n.tilde <- length(vote.88)
 X.tilde <- cbind(rep(1, n.tilde), vote.88, incumbency.90)
 
 n.sims <- 4000
-sim.88 <- fit88.post$beta
+sim.88 <- fit88_post$beta
 y.tilde <- array(NA, c(n.sims, n.tilde))
 for (s in 1:n.sims) {
-  pred <- X.tilde %*% fit88.post$beta[s,]
+  pred <- X.tilde %*% fit88_post$beta[s,]
   ok <- !is.na(pred)
-  y.tilde[s, ok] <- rnorm(sum(ok), pred[ok], fit88.post$sigma[s])
+  y.tilde[s, ok] <- rnorm(sum(ok), pred[ok], fit88_post$sigma[s])
 }
 
 ## Predictive simulation for a nonlinear function of new data
@@ -234,11 +257,11 @@ for (s in 1:n.sims) {
 ## Implementation using functions
 
 Pred.88 <- function(X.pred) {
-  pred <- X.tilde %*% t(fit88.post$beta)
+  pred <- X.tilde %*% t(fit88_post$beta)
   ok <- !is.na(pred)
   n.pred <- length(pred)
   y.pred <- rep(NA, n.pred)
-  y.pred[ok] <- rnorm(sum(ok), pred[ok], fit88.post$sigma)
+  y.pred[ok] <- rnorm(sum(ok), pred[ok], fit88_post$sigma)
   return(y.pred)
 }
 
