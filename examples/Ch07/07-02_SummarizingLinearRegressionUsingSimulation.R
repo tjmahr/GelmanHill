@@ -127,15 +127,13 @@ dl_3 <- list(
   N = earnings$N,
   earnings = earnings$earnings,
   height = earnings$height,
-  sex = earnings$sex1
-)
+  sex = earnings$sex1)
 
 earnings_interactions_sf1 <- stan(
   file = "examples/Ch07/earnings_interactions.stan",
   data = dl_3,
   iter = 1000,
-  chains = 4
-)
+  chains = 4)
 
 #' Review the model's syntax:
 earnings_interactions_sf1@stanmodel

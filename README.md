@@ -10,6 +10,7 @@ script. As I work through the examples, I save notebooks.
 - Chapter 7
   - [07-01 Simulating Probability Models](examples/Ch07/07-01_SimulationOfProbabilityModels.md)
   - [07-02 Summarizing Linear Regression Using Simulation](examples/Ch07/07-02_SummarizingLinearRegressionUsingSimulation.md)
+  - [07-03 Simulation for Nonlinear Predictions](examples/Ch07/07-03_SimulationForNonLinearPredictions.md)
 
 
 ## BUGS vs. Stan
