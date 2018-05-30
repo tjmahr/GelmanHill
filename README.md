@@ -1,6 +1,6 @@
-# GelmanHill
+# Gelman and Hill (2006)
 
-Examples and data for [Gelman &amp; Hill 2007][book-link].
+Examples and data for the classic textbook [Gelman and Hill (2006)][book-link].
 
 ## Notebooks
 
@@ -15,6 +15,10 @@ script. As I work through the examples, I save notebooks.
 
 ## BUGS vs. Stan
 
+I created this repository so that I could work through the book's examples 
+as an RStudio project. Things have become slightly more complicated:
+The BUGS code in the book is effectively unsupported (in favor of Stan).
+
 I originally downloaded the materials from [Gelman's page][arm-page] and 
 stored them in this repository. These files used BUGS for model fitting, 
 so they represent the canonical computing materials for the first 
@@ -24,7 +28,7 @@ Gelman's [instructions page for BUGS][bugsR] is now titled "Use Stan
 instead", so I'll be using [Stan](http://mc-stan.org/)/RStan instead. 
 Fortunately, Stan materials for the book were 
 [available][examples-commit], and I've replaced the BUGS examples with 
-Stan examples. 
+Stan examples. These Stan examples are from circa 2015.
 
 I'm taking the liberty to modify examples and rename files as I work 
 through them. I've tagged the commits with unmodified versions of the 
